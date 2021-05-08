@@ -1,15 +1,25 @@
-FROM ubuntu:latest
+# For more information, please refer to https://aka.ms/vscode-docker-python
+FROM python:3.8-slim-buster
 
-RUN apt update && apt upgrade -y
-RUN apt install -y -q build-essential python3-pip python3-dev
-RUN pip3 install -U pip setuptools wheel 
-RUN pip install gunicorn uvloop httptools
+EXPOSE 8000
 
-COPY requirements.txt /app/requirements.txt
-RUN pip3 install -r /app/requirements.txt
+# Keeps Python from generating .pyc files in the container
+ENV PYTHONDONTWRITEBYTECODE=1
 
-ENV ACCESS_LOG=${ACCESS_LOG:-/proc/1/fd/1}
-COPY /service/ /app
-# SUPER RUN
-# EXPOSE THE DOCKER PORT 
-ENTRYPOINT /usr/local/bin/gunicorn main:app  -b 0.0.0.0:80 -w 4 -k uvicorn.workers.UvicornWorker  --chdir /app --access-logfile "$ACCESS_LOG"
+# Turns off buffering for easier container logging
+ENV PYTHONUNBUFFERED=1
+
+# Install pip requirements
+COPY requirements.txt .
+RUN python -m pip install -r requirements.txt
+
+WORKDIR /app
+COPY . /app
+
+# Creates a non-root user with an explicit UID and adds permission to access the /app folder
+# For more info, please refer to https://aka.ms/vscode-docker-python-configure-containers
+RUN adduser -u 5678 --disabled-password --gecos "" appuser && chown -R appuser /app
+USER appuser
+
+# During debugging, this entry point will be overridden. For more information, please refer to https://aka.ms/vscode-docker-python-debug
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "-k", "uvicorn.workers.UvicornWorker", "services\main:app"]
